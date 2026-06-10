@@ -1,0 +1,42 @@
+{
+  "package_version": 2,
+  "name": "qiniu-upload",
+  "version": "1.1.0",
+  "description": "Cocos 构建完成后将 remote/ 远程资源自动上传到七牛云",
+  "author": "DreamAbyssSurvivors",
+  "editor": ">=3.7.0",
+  "main": "./main.js",
+  "panels": {
+    "default": {
+      "title": "七牛云上传",
+      "type": "dockable",
+      "main": "./panels/default/index.js",
+      "size": {
+        "min-width": 380,
+        "min-height": 520,
+        "width": 420,
+        "height": 640
+      }
+    }
+  },
+  "contributions": {
+    "builder": "./builder/index.js",
+    "menu": [
+      {
+        "path": "扩展/七牛云上传",
+        "label": "打开七牛云上传面板",
+        "message": "open-panel"
+      }
+    ],
+    "messages": {
+      "open-panel": {
+        "methods": [
+          "openPanel"
+        ]
+      }
+    }
+  },
+  "dependencies": {
+    "qiniu": "^7.14.0"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "accessKey": "你的七牛 AccessKey",
+  "secretKey": "你的七牛 SecretKey",
+  "bucket": "你的存储空间名称",
+  "zone": "z0",
+  "keyPrefix": "remote",
+  "cdnDomain": "https://你的CDN域名",
+  "uploadOnBuild": false,
+  "remoteBuildDir": "build/wechatgame"
+}

@@ -1,0 +1,46 @@
+# 依赖
+node_modules/
+
+# 七牛配置（含 AccessKey / SecretKey，使用 qiniu.config.example.json 作为模板）
+qiniu.config.json
+
+# 构建上传记录（由插件自动生成）
+.qiniu-upload-last.json
+
+# 环境变量
+.env
+.env.*
+!.env.example
+
+# 日志
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# 操作系统
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# 编辑器 / IDE
+.vscode/
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*~
+
+# 临时文件
+*.log
+*.tmp
+*.temp
+.cache/
