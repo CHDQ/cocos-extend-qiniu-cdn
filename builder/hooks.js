@@ -5,14 +5,18 @@ const path = require('path');
 const {
     loadConfigFile,
     resolveExtensionRoot,
+    resolveProjectRoot,
     describeCredentialSource,
     loadBuildPackageOptions,
+    resolveVersionedKeyPrefix,
+    resolveVersionedCdnServer,
 } = require('../lib/config-store');
 const { uploadRemoteDir } = require('../lib/upload-remote');
 const { validateRemotePayload } = require('../lib/remote-payload');
 const { validateWechatBuild } = require('../lib/validate-wechat-build');
 const {
     patchWechatProjectConfig,
+    patchWechatResourceServer,
     stripRemoteDir,
     assertGameJsExists,
     patchFirstScreen,
@@ -24,6 +28,7 @@ exports.throwError = true;
 
 exports.onAfterBuild = async function onAfterBuild(options, result) {
     const extensionRoot = resolveExtensionRoot(options, result);
+    const projectRoot = resolveProjectRoot(options, result);
     const pkgOptions = loadBuildPackageOptions(options, result);
     const fileConfig = loadConfigFile(extensionRoot);
     const shouldUpload = pkgOptions.uploadToQiniu ?? fileConfig.uploadOnBuild;
@@ -38,13 +43,13 @@ exports.onAfterBuild = async function onAfterBuild(options, result) {
         console.log(`[${PACKAGE_NAME}] 已修正 project.config.json（首包 game.js + 忽略 remote/）`);
     }
 
-    // 全屏封面模式：与游戏首页同款封面，做到从微信加载到首页无缝衔接；
+    // 全屏封面模式：使用项目内首页加载图，做到从微信加载到首页无缝衔接；
     // 若封面缺失则回退为「深色背景 + 居中 logo」模式。
     if (patchFirstScreen(result.dest, {
-        bgSrcPath: path.join(extensionRoot, 'assets', 'home.jpg'),
+        bgSrcPath: path.join(projectRoot, 'assets/resources/ui/home/homeLoading.png'),
         logoSrcPath: path.join(extensionRoot, 'assets', 'splash-logo.jpg'),
     })) {
-        console.log(`[${PACKAGE_NAME}] 已替换 Cocos 启动画面为游戏首页同款封面（去标语 + 全屏封面 + 青色进度条）`);
+        console.log(`[${PACKAGE_NAME}] 已替换 Cocos 启动画面为 home/homeLoading.png（去标语 + 全屏封面 + 青色进度条）`);
     }
 
     if (!shouldUpload) {
@@ -72,6 +77,12 @@ exports.onAfterBuild = async function onAfterBuild(options, result) {
             + ' 引擎 CDN 路径为 {server}remote/{bundle}/...，请与构建面板「资源服务器」根域名配合使用。',
         );
     }
+    const cdnVersion = String(pkgOptions.qiniuCdnVersion ?? fileConfig.cdnVersion ?? '').trim();
+    const versionedKeyPrefix = resolveVersionedKeyPrefix(keyPrefix, cdnVersion);
+    const versionedCdnServer = resolveVersionedCdnServer(fileConfig.cdnDomain, cdnVersion);
+    if (patchWechatResourceServer(result.dest, versionedCdnServer)) {
+        console.log(`[${PACKAGE_NAME}] 已修正远程资源服务器地址: ${versionedCdnServer}`);
+    }
 
     const remoteBundleNames = fs.readdirSync(remoteDir).filter((name) => {
         const full = path.join(remoteDir, name);
@@ -95,6 +106,9 @@ exports.onAfterBuild = async function onAfterBuild(options, result) {
     if (keyPrefix) {
         console.log(`[${PACKAGE_NAME}] Key 前缀: ${keyPrefix}`);
     }
+    console.log(`[${PACKAGE_NAME}] CDN 版本号: ${cdnVersion}`);
+    console.log(`[${PACKAGE_NAME}] 实际上传前缀: ${versionedKeyPrefix}`);
+    console.log(`[${PACKAGE_NAME}] 资源服务器地址: ${versionedCdnServer}`);
 
     if (!payloadCheck.ok) {
         throw new Error(`[${PACKAGE_NAME}] 无法上传: ${payloadCheck.reason}`);
@@ -106,7 +120,7 @@ exports.onAfterBuild = async function onAfterBuild(options, result) {
     );
 
     const summary = await uploadRemoteDir(remoteDir, extensionRoot, {
-        keyPrefix,
+        keyPrefix: versionedKeyPrefix,
         onlyBundle: 'resources',
         log: (msg) => console.log(msg),
     });
@@ -120,6 +134,7 @@ exports.onAfterBuild = async function onAfterBuild(options, result) {
         dest: result.dest,
         bucket: summary.bucket,
         keyPrefix: summary.keyPrefix,
+        cdnVersion,
         uploaded: summary.uploaded,
         total: summary.total,
     };

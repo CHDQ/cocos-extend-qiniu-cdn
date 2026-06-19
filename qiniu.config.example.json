@@ -4,6 +4,7 @@
   "bucket": "你的存储空间名称",
   "zone": "z0",
   "keyPrefix": "remote",
+  "cdnVersion": "v20260619-001",
   "cdnDomain": "https://你的CDN域名",
   "uploadOnBuild": false,
   "remoteBuildDir": "build/wechatgame"

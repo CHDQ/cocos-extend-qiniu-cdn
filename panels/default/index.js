@@ -7,6 +7,7 @@ const {
     loadConfigFile,
     saveConfigFile,
     resolveRemoteDir,
+    resolveVersionedKeyPrefix,
 } = require('../../lib/config-store');
 const { testConnection } = require('../../lib/qiniu-client');
 const { uploadRemoteDir } = require('../../lib/upload-remote');
@@ -33,6 +34,7 @@ function readForm(panel) {
         bucket: panel.$.bucket.value || '',
         zone: panel.$.zone.value || 'z0',
         keyPrefix: panel.$.keyPrefix.value || '',
+        cdnVersion: panel.$.cdnVersion.value || '',
         cdnDomain: panel.$.cdnDomain.value || '',
         uploadOnBuild: !!panel.$.uploadOnBuild.value,
         remoteBuildDir: panel.$.remoteBuildDir.value || 'build/wechatgame',
@@ -45,6 +47,7 @@ function fillForm(panel, config) {
     panel.$.bucket.value = config.bucket || '';
     panel.$.zone.value = config.zone || 'z0';
     panel.$.keyPrefix.value = config.keyPrefix || '';
+    panel.$.cdnVersion.value = config.cdnVersion || '';
     panel.$.cdnDomain.value = config.cdnDomain || '';
     panel.$.uploadOnBuild.value = !!config.uploadOnBuild;
     panel.$.remoteBuildDir.value = config.remoteBuildDir || 'build/wechatgame';
@@ -103,10 +106,14 @@ module.exports = Editor.Panel.define({
             <ui-input slot="content" class="key-prefix" placeholder="dream-abyss"></ui-input>
         </ui-prop>
         <ui-prop>
+            <ui-label slot="label" value="版本号"></ui-label>
+            <ui-input slot="content" class="cdn-version" placeholder="v20260619-001"></ui-input>
+        </ui-prop>
+        <ui-prop>
             <ui-label slot="label" value="CDN 域名"></ui-label>
             <ui-input slot="content" class="cdn-domain" placeholder="https://das.game.chdq-cloud.top"></ui-input>
         </ui-prop>
-        <ui-label class="hint-block" value="Cocos 构建面板「资源服务器地址」= CDN 根域名（不要带 /remote/）。引擎会自动拼接 remote/ 目录。"></ui-label>
+        <ui-label class="hint-block" value="同一个版本号会上传到同一个文件夹：版本号/Key 前缀/resources/...；资源服务器地址 = CDN 域名/版本号/。"></ui-label>
         <ui-prop>
             <ui-label slot="label" value="构建后自动上传"></ui-label>
             <ui-checkbox slot="content" class="upload-on-build"></ui-checkbox>
@@ -184,6 +191,7 @@ module.exports = Editor.Panel.define({
         bucket: '.bucket',
         zone: '.zone',
         keyPrefix: '.key-prefix',
+        cdnVersion: '.cdn-version',
         cdnDomain: '.cdn-domain',
         uploadOnBuild: '.upload-on-build',
         remoteBuildDir: '.remote-build-dir',
@@ -229,10 +237,11 @@ module.exports = Editor.Panel.define({
                 saveConfigFile(EXTENSION_ROOT, readForm(this));
                 const form = readForm(this);
                 const remoteDir = resolveRemoteDir(proj, EXTENSION_ROOT, form.remoteBuildDir);
+                const versionedKeyPrefix = resolveVersionedKeyPrefix(form.keyPrefix, form.cdnVersion);
                 setStatus(this, `正在上传 ${remoteDir} ...`, false);
 
                 const summary = await uploadRemoteDir(remoteDir, EXTENSION_ROOT, {
-                    keyPrefix: form.keyPrefix,
+                    keyPrefix: versionedKeyPrefix,
                     log: (msg) => console.log(msg),
                 });
 

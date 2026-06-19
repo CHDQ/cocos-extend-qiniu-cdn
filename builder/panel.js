@@ -26,9 +26,11 @@ function syncFromFile(panel) {
 
     panel.$.uploadToQiniu.value = current.uploadToQiniu ?? cfg.uploadOnBuild;
     panel.$.qiniuKeyPrefix.value = current.qiniuKeyPrefix ?? cfg.keyPrefix ?? '';
+    panel.$.qiniuCdnVersion.value = current.qiniuCdnVersion ?? cfg.cdnVersion ?? '';
 
     dispatch(panel, 'uploadToQiniu', !!panel.$.uploadToQiniu.value);
     dispatch(panel, 'qiniuKeyPrefix', panel.$.qiniuKeyPrefix.value || '');
+    dispatch(panel, 'qiniuCdnVersion', panel.$.qiniuCdnVersion.value || '');
 }
 
 exports.template = `
@@ -41,7 +43,11 @@ exports.template = `
         <ui-label slot="label" value="七牛 Key 前缀"></ui-label>
         <ui-input slot="content" class="qiniu-key-prefix" placeholder="dream-abyss"></ui-input>
     </ui-prop>
-    <ui-label class="build-hint" value="Key 前缀填 remote；Cocos 资源服务器地址填 CDN 根域名（勿带 /remote/）"></ui-label>
+    <ui-prop>
+        <ui-label slot="label" value="七牛版本号"></ui-label>
+        <ui-input slot="content" class="qiniu-cdn-version" placeholder="v20260619-001"></ui-input>
+    </ui-prop>
+    <ui-label class="build-hint" value="上传路径为 Key 前缀/版本号/resources/...；同一个版本号会覆盖同一个 CDN 文件夹。"></ui-label>
 </div>
 `;
 
@@ -60,6 +66,7 @@ exports.style = `
 exports.$ = {
     uploadToQiniu: '.upload-to-qiniu',
     qiniuKeyPrefix: '.qiniu-key-prefix',
+    qiniuCdnVersion: '.qiniu-cdn-version',
 };
 
 exports.ready = function ready(options) {
@@ -75,6 +82,12 @@ exports.ready = function ready(options) {
     });
     panelRef.$.qiniuKeyPrefix.addEventListener('confirm', () => {
         dispatch(panelRef, 'qiniuKeyPrefix', panelRef.$.qiniuKeyPrefix.value || '');
+    });
+    panelRef.$.qiniuCdnVersion.addEventListener('change', () => {
+        dispatch(panelRef, 'qiniuCdnVersion', panelRef.$.qiniuCdnVersion.value || '');
+    });
+    panelRef.$.qiniuCdnVersion.addEventListener('confirm', () => {
+        dispatch(panelRef, 'qiniuCdnVersion', panelRef.$.qiniuCdnVersion.value || '');
     });
 };
 

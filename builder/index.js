@@ -23,6 +23,10 @@ exports.configs = {
                 label: '七牛 Key 前缀',
                 default: 'remote',
             },
+            qiniuCdnVersion: {
+                label: '七牛版本号',
+                default: '',
+            },
         },
     },
 };
