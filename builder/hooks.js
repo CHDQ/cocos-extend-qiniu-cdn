@@ -5,7 +5,6 @@ const path = require('path');
 const {
     loadConfigFile,
     resolveExtensionRoot,
-    resolveProjectRoot,
     describeCredentialSource,
     loadBuildPackageOptions,
     resolveVersionedKeyPrefix,
@@ -19,7 +18,6 @@ const {
     patchWechatResourceServer,
     stripRemoteDir,
     assertGameJsExists,
-    patchFirstScreen,
 } = require('../lib/wechat-project-fix');
 
 const PACKAGE_NAME = 'qiniu-upload';
@@ -28,7 +26,6 @@ exports.throwError = true;
 
 exports.onAfterBuild = async function onAfterBuild(options, result) {
     const extensionRoot = resolveExtensionRoot(options, result);
-    const projectRoot = resolveProjectRoot(options, result);
     const pkgOptions = loadBuildPackageOptions(options, result);
     const fileConfig = loadConfigFile(extensionRoot);
     const shouldUpload = pkgOptions.uploadToQiniu ?? fileConfig.uploadOnBuild;
@@ -41,15 +38,6 @@ exports.onAfterBuild = async function onAfterBuild(options, result) {
 
     if (patchWechatProjectConfig(result.dest)) {
         console.log(`[${PACKAGE_NAME}] 已修正 project.config.json（首包 game.js + 忽略 remote/）`);
-    }
-
-    // 全屏封面模式：使用项目内首页加载图，做到从微信加载到首页无缝衔接；
-    // 若封面缺失则回退为「深色背景 + 居中 logo」模式。
-    if (patchFirstScreen(result.dest, {
-        bgSrcPath: path.join(projectRoot, 'assets/resources/ui/home/homeLoading.png'),
-        logoSrcPath: path.join(extensionRoot, 'assets', 'splash-logo.jpg'),
-    })) {
-        console.log(`[${PACKAGE_NAME}] 已替换 Cocos 启动画面为 home/homeLoading.png（去标语 + 全屏封面 + 青色进度条）`);
     }
 
     if (!shouldUpload) {
