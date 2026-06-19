@@ -205,7 +205,7 @@ module.exports = Editor.Panel.define({
         async saveConfig() {
             try {
                 const config = readForm(this);
-                saveConfigFile(EXTENSION_ROOT, config);
+                saveConfigFile(EXTENSION_ROOT, config, projectPath() || undefined);
                 setStatus(this, '配置已保存到 qiniu.config.json', false);
             } catch (err) {
                 setStatus(this, `保存失败: ${err.message}`, true);
@@ -213,7 +213,7 @@ module.exports = Editor.Panel.define({
         },
         async testConfig() {
             try {
-                saveConfigFile(EXTENSION_ROOT, readForm(this));
+                saveConfigFile(EXTENSION_ROOT, readForm(this), projectPath() || undefined);
                 const form = readForm(this);
                 setStatus(this, '正在向七牛上传探针文件验证凭证...', false);
                 const result = await testConnection(EXTENSION_ROOT, form);
@@ -234,7 +234,7 @@ module.exports = Editor.Panel.define({
             }
 
             try {
-                saveConfigFile(EXTENSION_ROOT, readForm(this));
+                saveConfigFile(EXTENSION_ROOT, readForm(this), projectPath() || undefined);
                 const form = readForm(this);
                 const remoteDir = resolveRemoteDir(proj, EXTENSION_ROOT, form.remoteBuildDir);
                 const versionedKeyPrefix = resolveVersionedKeyPrefix(form.keyPrefix, form.cdnVersion);

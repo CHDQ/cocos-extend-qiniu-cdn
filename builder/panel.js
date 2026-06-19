@@ -1,7 +1,7 @@
 'use strict';
 
 const Path = require('path');
-const { loadConfigFile } = require('../lib/config-store');
+const { loadConfigFile, saveConfigFile } = require('../lib/config-store');
 
 const PACKAGE_NAME = 'qiniu-upload';
 const EXTENSION_ROOT = Path.resolve(__dirname, '..');
@@ -20,13 +20,34 @@ function dispatch(panel, key, value) {
     panel.dispatch('update', optionKey(key), value);
 }
 
+function projectRootFromPanel(panel) {
+    if (panel.options && panel.options.project) {
+        return panel.options.project;
+    }
+    if (typeof Editor !== 'undefined' && Editor.Project && Editor.Project.path) {
+        return Editor.Project.path;
+    }
+    return '';
+}
+
+function persistBuildFields(panel, fields) {
+    const projectRoot = projectRootFromPanel(panel);
+    const current = loadConfigFile(EXTENSION_ROOT);
+    saveConfigFile(EXTENSION_ROOT, {
+        ...current,
+        uploadOnBuild: fields.uploadOnBuild ?? current.uploadOnBuild,
+        keyPrefix: fields.keyPrefix ?? current.keyPrefix,
+        cdnVersion: fields.cdnVersion ?? current.cdnVersion,
+    }, projectRoot || undefined);
+}
+
 function syncFromFile(panel) {
     const cfg = loadConfigFile(EXTENSION_ROOT);
     const current = getPkgOptions(panel);
 
-    panel.$.uploadToQiniu.value = current.uploadToQiniu ?? cfg.uploadOnBuild;
-    panel.$.qiniuKeyPrefix.value = current.qiniuKeyPrefix ?? cfg.keyPrefix ?? '';
-    panel.$.qiniuCdnVersion.value = current.qiniuCdnVersion ?? cfg.cdnVersion ?? '';
+    panel.$.uploadToQiniu.value = cfg.uploadOnBuild ?? current.uploadToQiniu;
+    panel.$.qiniuKeyPrefix.value = cfg.keyPrefix || current.qiniuKeyPrefix || '';
+    panel.$.qiniuCdnVersion.value = cfg.cdnVersion || current.qiniuCdnVersion || '';
 
     dispatch(panel, 'uploadToQiniu', !!panel.$.uploadToQiniu.value);
     dispatch(panel, 'qiniuKeyPrefix', panel.$.qiniuKeyPrefix.value || '');
@@ -47,7 +68,7 @@ exports.template = `
         <ui-label slot="label" value="七牛版本号"></ui-label>
         <ui-input slot="content" class="qiniu-cdn-version" placeholder="v20260619-001"></ui-input>
     </ui-prop>
-    <ui-label class="build-hint" value="上传路径为 Key 前缀/版本号/resources/...；同一个版本号会覆盖同一个 CDN 文件夹。"></ui-label>
+    <ui-label class="build-hint" value="上传路径为 版本号/Key 前缀/resources/...；版本号以「七牛云上传」面板保存的配置为准。"></ui-label>
 </div>
 `;
 
@@ -75,19 +96,29 @@ exports.ready = function ready(options) {
     syncFromFile(panelRef);
 
     panelRef.$.uploadToQiniu.addEventListener('change', () => {
-        dispatch(panelRef, 'uploadToQiniu', !!panelRef.$.uploadToQiniu.value);
+        const uploadOnBuild = !!panelRef.$.uploadToQiniu.value;
+        dispatch(panelRef, 'uploadToQiniu', uploadOnBuild);
+        persistBuildFields(panelRef, { uploadOnBuild });
     });
     panelRef.$.qiniuKeyPrefix.addEventListener('change', () => {
-        dispatch(panelRef, 'qiniuKeyPrefix', panelRef.$.qiniuKeyPrefix.value || '');
+        const keyPrefix = panelRef.$.qiniuKeyPrefix.value || '';
+        dispatch(panelRef, 'qiniuKeyPrefix', keyPrefix);
+        persistBuildFields(panelRef, { keyPrefix });
     });
     panelRef.$.qiniuKeyPrefix.addEventListener('confirm', () => {
-        dispatch(panelRef, 'qiniuKeyPrefix', panelRef.$.qiniuKeyPrefix.value || '');
+        const keyPrefix = panelRef.$.qiniuKeyPrefix.value || '';
+        dispatch(panelRef, 'qiniuKeyPrefix', keyPrefix);
+        persistBuildFields(panelRef, { keyPrefix });
     });
     panelRef.$.qiniuCdnVersion.addEventListener('change', () => {
-        dispatch(panelRef, 'qiniuCdnVersion', panelRef.$.qiniuCdnVersion.value || '');
+        const cdnVersion = panelRef.$.qiniuCdnVersion.value || '';
+        dispatch(panelRef, 'qiniuCdnVersion', cdnVersion);
+        persistBuildFields(panelRef, { cdnVersion });
     });
     panelRef.$.qiniuCdnVersion.addEventListener('confirm', () => {
-        dispatch(panelRef, 'qiniuCdnVersion', panelRef.$.qiniuCdnVersion.value || '');
+        const cdnVersion = panelRef.$.qiniuCdnVersion.value || '';
+        dispatch(panelRef, 'qiniuCdnVersion', cdnVersion);
+        persistBuildFields(panelRef, { cdnVersion });
     });
 };
 

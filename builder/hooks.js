@@ -7,6 +7,8 @@ const {
     resolveExtensionRoot,
     describeCredentialSource,
     loadBuildPackageOptions,
+    resolveBuildKeyPrefix,
+    resolveBuildCdnVersion,
     resolveVersionedKeyPrefix,
     resolveVersionedCdnServer,
 } = require('../lib/config-store');
@@ -57,7 +59,7 @@ exports.onAfterBuild = async function onAfterBuild(options, result) {
     }
 
     const remoteDir = path.join(result.dest, 'remote');
-    let keyPrefix = String(pkgOptions.qiniuKeyPrefix ?? fileConfig.keyPrefix ?? '').trim();
+    let keyPrefix = resolveBuildKeyPrefix(pkgOptions, fileConfig);
     if (!keyPrefix) {
         keyPrefix = 'remote';
         console.warn(
@@ -65,7 +67,7 @@ exports.onAfterBuild = async function onAfterBuild(options, result) {
             + ' 引擎 CDN 路径为 {server}remote/{bundle}/...，请与构建面板「资源服务器」根域名配合使用。',
         );
     }
-    const cdnVersion = String(pkgOptions.qiniuCdnVersion ?? fileConfig.cdnVersion ?? '').trim();
+    const cdnVersion = resolveBuildCdnVersion(pkgOptions, fileConfig);
     const versionedKeyPrefix = resolveVersionedKeyPrefix(keyPrefix, cdnVersion);
     const versionedCdnServer = resolveVersionedCdnServer(fileConfig.cdnDomain, cdnVersion);
     if (patchWechatResourceServer(result.dest, versionedCdnServer)) {
