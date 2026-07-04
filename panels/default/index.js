@@ -7,10 +7,12 @@ const {
     loadConfigFile,
     saveConfigFile,
     resolveRemoteDir,
+    resolveVersionedCdnServer,
     resolveVersionedKeyPrefix,
 } = require('../../lib/config-store');
 const { testConnection } = require('../../lib/qiniu-client');
 const { uploadRemoteDir } = require('../../lib/upload-remote');
+const { refreshCdnCacheAfterUpload } = require('../../lib/cdn-cache-refresh');
 
 const PACKAGE_NAME = 'qiniu-upload';
 const EXTENSION_ROOT = Path.resolve(__dirname, '../..');
@@ -36,6 +38,7 @@ function readForm(panel) {
         keyPrefix: panel.$.keyPrefix.value || '',
         cdnVersion: panel.$.cdnVersion.value || '',
         cdnDomain: panel.$.cdnDomain.value || '',
+        refreshCdnAfterUpload: !!panel.$.refreshCdnAfterUpload.value,
         uploadOnBuild: !!panel.$.uploadOnBuild.value,
         remoteBuildDir: panel.$.remoteBuildDir.value || 'build/wechatgame',
     };
@@ -49,6 +52,7 @@ function fillForm(panel, config) {
     panel.$.keyPrefix.value = config.keyPrefix || '';
     panel.$.cdnVersion.value = config.cdnVersion || '';
     panel.$.cdnDomain.value = config.cdnDomain || '';
+    panel.$.refreshCdnAfterUpload.value = config.refreshCdnAfterUpload !== false;
     panel.$.uploadOnBuild.value = !!config.uploadOnBuild;
     panel.$.remoteBuildDir.value = config.remoteBuildDir || 'build/wechatgame';
     updateRemotePreview(panel);
@@ -114,6 +118,10 @@ module.exports = Editor.Panel.define({
             <ui-input slot="content" class="cdn-domain" placeholder="https://das.game.chdq-cloud.top"></ui-input>
         </ui-prop>
         <ui-label class="hint-block" value="同一个版本号会上传到同一个文件夹：版本号/Key 前缀/resources/...；资源服务器地址 = CDN 域名/版本号/。"></ui-label>
+        <ui-prop>
+            <ui-label slot="label" value="上传后刷新 CDN"></ui-label>
+            <ui-checkbox slot="content" class="refresh-cdn-after-upload"></ui-checkbox>
+        </ui-prop>
         <ui-prop>
             <ui-label slot="label" value="构建后自动上传"></ui-label>
             <ui-checkbox slot="content" class="upload-on-build"></ui-checkbox>
@@ -193,6 +201,7 @@ module.exports = Editor.Panel.define({
         keyPrefix: '.key-prefix',
         cdnVersion: '.cdn-version',
         cdnDomain: '.cdn-domain',
+        refreshCdnAfterUpload: '.refresh-cdn-after-upload',
         uploadOnBuild: '.upload-on-build',
         remoteBuildDir: '.remote-build-dir',
         remotePreview: '.remote-preview',
@@ -238,6 +247,7 @@ module.exports = Editor.Panel.define({
                 const form = readForm(this);
                 const remoteDir = resolveRemoteDir(proj, EXTENSION_ROOT, form.remoteBuildDir);
                 const versionedKeyPrefix = resolveVersionedKeyPrefix(form.keyPrefix, form.cdnVersion);
+                const versionedCdnServer = resolveVersionedCdnServer(form.cdnDomain, form.cdnVersion);
                 setStatus(this, `正在上传 ${remoteDir} ...`, false);
 
                 const summary = await uploadRemoteDir(remoteDir, EXTENSION_ROOT, {
@@ -250,9 +260,29 @@ module.exports = Editor.Panel.define({
                     return;
                 }
 
+                if (form.refreshCdnAfterUpload !== false) {
+                    setStatus(this, `上传完成，正在刷新 CDN 缓存 ...`, false);
+                    try {
+                        await refreshCdnCacheAfterUpload(EXTENSION_ROOT, {
+                            cdnDomain: form.cdnDomain,
+                            uploadedKeys: summary.uploadedKeys,
+                            versionedCdnServer,
+                            log: (msg) => console.log(msg),
+                        });
+                    } catch (err) {
+                        setStatus(
+                            this,
+                            `上传完成，但 CDN 缓存刷新失败: ${err.message}`,
+                            true,
+                        );
+                        return;
+                    }
+                }
+
                 setStatus(
                     this,
-                    `上传完成: ${summary.uploaded}/${summary.total} 个文件 → ${summary.bucket}`,
+                    `上传完成: ${summary.uploaded}/${summary.total} 个文件 → ${summary.bucket}`
+                    + (form.refreshCdnAfterUpload !== false ? '，CDN 缓存已提交刷新' : ''),
                     false,
                 );
             } catch (err) {

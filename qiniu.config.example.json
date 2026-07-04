@@ -6,6 +6,7 @@
   "keyPrefix": "remote",
   "cdnVersion": "v20260619-001",
   "cdnDomain": "https://你的CDN域名",
+  "refreshCdnAfterUpload": true,
   "uploadOnBuild": false,
   "remoteBuildDir": "build/wechatgame"
 }

@@ -13,10 +13,12 @@ const {
     resolveVersionedCdnServer,
 } = require('../lib/config-store');
 const { uploadRemoteDir } = require('../lib/upload-remote');
+const { refreshCdnCacheAfterUpload } = require('../lib/cdn-cache-refresh');
 const { validateRemotePayload } = require('../lib/remote-payload');
 const { validateWechatBuild } = require('../lib/validate-wechat-build');
 const {
     patchWechatProjectConfig,
+    patchWechatLocalFontPreload,
     patchWechatResourceServer,
     stripRemoteDir,
     assertGameJsExists,
@@ -41,9 +43,22 @@ exports.onAfterBuild = async function onAfterBuild(options, result) {
     if (patchWechatProjectConfig(result.dest)) {
         console.log(`[${PACKAGE_NAME}] 已修正 project.config.json（首包 game.js + 忽略 remote/）`);
     }
+    if (patchWechatLocalFontPreload(result.dest)) {
+        console.log(`[${PACKAGE_NAME}] 已将 localfont 固定为微信本地预加载包`);
+    }
+
+    let keyPrefix = resolveBuildKeyPrefix(pkgOptions, fileConfig);
+    if (!keyPrefix) {
+        keyPrefix = 'remote';
+    }
+    const cdnVersion = resolveBuildCdnVersion(pkgOptions, fileConfig);
+    const versionedCdnServer = resolveVersionedCdnServer(fileConfig.cdnDomain, cdnVersion);
+    if (patchWechatResourceServer(result.dest, versionedCdnServer)) {
+        console.log(`[${PACKAGE_NAME}] 已修正远程资源服务器地址: ${versionedCdnServer}`);
+    }
 
     if (!shouldUpload) {
-        console.log(`[${PACKAGE_NAME}] 未开启「构建后上传七牛」，跳过 CDN 上传`);
+        console.log(`[${PACKAGE_NAME}] 未开启「构建后上传七牛」，跳过 CDN 上传（资源服务器已按版本号 ${cdnVersion} 写入）`);
         return;
     }
 
@@ -59,20 +74,7 @@ exports.onAfterBuild = async function onAfterBuild(options, result) {
     }
 
     const remoteDir = path.join(result.dest, 'remote');
-    let keyPrefix = resolveBuildKeyPrefix(pkgOptions, fileConfig);
-    if (!keyPrefix) {
-        keyPrefix = 'remote';
-        console.warn(
-            `[${PACKAGE_NAME}] 七牛 Key 前缀未配置，已使用默认值 "remote"。`
-            + ' 引擎 CDN 路径为 {server}remote/{bundle}/...，请与构建面板「资源服务器」根域名配合使用。',
-        );
-    }
-    const cdnVersion = resolveBuildCdnVersion(pkgOptions, fileConfig);
     const versionedKeyPrefix = resolveVersionedKeyPrefix(keyPrefix, cdnVersion);
-    const versionedCdnServer = resolveVersionedCdnServer(fileConfig.cdnDomain, cdnVersion);
-    if (patchWechatResourceServer(result.dest, versionedCdnServer)) {
-        console.log(`[${PACKAGE_NAME}] 已修正远程资源服务器地址: ${versionedCdnServer}`);
-    }
 
     const remoteBundleNames = fs.readdirSync(remoteDir).filter((name) => {
         const full = path.join(remoteDir, name);
@@ -115,6 +117,19 @@ exports.onAfterBuild = async function onAfterBuild(options, result) {
         log: (msg) => console.log(msg),
     });
 
+    if (fileConfig.refreshCdnAfterUpload !== false) {
+        try {
+            await refreshCdnCacheAfterUpload(extensionRoot, {
+                cdnDomain: fileConfig.cdnDomain,
+                uploadedKeys: summary.uploadedKeys,
+                versionedCdnServer,
+                log: (msg) => console.log(msg),
+            });
+        } catch (err) {
+            console.warn(`[${PACKAGE_NAME}] CDN 缓存刷新失败（文件已上传成功）: ${err.message}`);
+        }
+    }
+
     if (stripRemoteDir(result.dest)) {
         console.log(`[${PACKAGE_NAME}] 已移除构建目录中的 remote/（静态资源仅保留在七牛 CDN）`);
     }
@@ -127,6 +142,7 @@ exports.onAfterBuild = async function onAfterBuild(options, result) {
         cdnVersion,
         uploaded: summary.uploaded,
         total: summary.total,
+        refreshedCdn: fileConfig.refreshCdnAfterUpload !== false,
     };
     fs.writeFileSync(
         path.join(extensionRoot, '.qiniu-upload-last.json'),
