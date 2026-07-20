@@ -19,6 +19,7 @@ const { validateWechatBuild } = require('../lib/validate-wechat-build');
 const {
     patchWechatProjectConfig,
     patchWechatLocalFontPreload,
+    patchFirstScreen,
     patchWechatResourceServer,
     stripRemoteDir,
     assertGameJsExists,
@@ -38,13 +39,19 @@ exports.onAfterBuild = async function onAfterBuild(options, result) {
         throw new Error(`[${PACKAGE_NAME}] 无法获取构建输出目录 result.dest`);
     }
 
-    assertGameJsExists(result.dest);
-
-    if (patchWechatProjectConfig(result.dest)) {
-        console.log(`[${PACKAGE_NAME}] 已修正 project.config.json（首包 game.js + 忽略 remote/）`);
-    }
-    if (patchWechatLocalFontPreload(result.dest)) {
-        console.log(`[${PACKAGE_NAME}] 已将 localfont 固定为微信本地预加载包`);
+    // 微信小游戏专属修正只在该平台执行，其他平台（web/原生）跳过，保证插件跨项目通用
+    const isWechatGame = options && options.platform === 'wechatgame';
+    if (isWechatGame) {
+        assertGameJsExists(result.dest);
+        if (patchFirstScreen(result.dest)) {
+            console.log(`[${PACKAGE_NAME}] 已移除 Cocos 启动 Loading（first-screen.js 空实现）`);
+        }
+        if (patchWechatProjectConfig(result.dest)) {
+            console.log(`[${PACKAGE_NAME}] 已修正 project.config.json（首包 game.js + 忽略 remote/）`);
+        }
+        if (patchWechatLocalFontPreload(result.dest)) {
+            console.log(`[${PACKAGE_NAME}] 已将 localfont 固定为微信本地预加载包`);
+        }
     }
 
     let keyPrefix = resolveBuildKeyPrefix(pkgOptions, fileConfig);
@@ -62,31 +69,22 @@ exports.onAfterBuild = async function onAfterBuild(options, result) {
         return;
     }
 
-    const buildCheck = validateWechatBuild(result.dest);
-    for (const warning of buildCheck.warnings) {
-        console.warn(`[${PACKAGE_NAME}] 构建检查警告: ${warning}`);
-    }
-    if (!buildCheck.ok) {
-        const detail = buildCheck.errors.map((item, index) => `${index + 1}. ${item}`).join('\n');
-        console.warn(
-            `[${PACKAGE_NAME}] 微信构建产物存在配置问题（仍会上传 remote/resources）：\n${detail}`,
-        );
+    if (isWechatGame) {
+        const buildCheck = validateWechatBuild(result.dest);
+        for (const warning of buildCheck.warnings) {
+            console.warn(`[${PACKAGE_NAME}] 构建检查警告: ${warning}`);
+        }
+        if (!buildCheck.ok) {
+            const detail = buildCheck.errors.map((item, index) => `${index + 1}. ${item}`).join('\n');
+            console.warn(
+                `[${PACKAGE_NAME}] 微信构建产物存在配置问题（仍会上传 remote）：\n${detail}`,
+            );
+        }
     }
 
     const remoteDir = path.join(result.dest, 'remote');
     const versionedKeyPrefix = resolveVersionedKeyPrefix(keyPrefix, cdnVersion);
 
-    const remoteBundleNames = fs.readdirSync(remoteDir).filter((name) => {
-        const full = path.join(remoteDir, name);
-        return fs.statSync(full).isDirectory();
-    });
-    const unexpectedRemote = remoteBundleNames.filter((n) => n !== 'resources');
-    if (unexpectedRemote.length) {
-        console.warn(
-            `[${PACKAGE_NAME}] remote/ 含非 resources 目录: ${unexpectedRemote.join(', ')}。`
-            + ' internal/main 不应远程，请关闭「主包远程」后重新构建，否则运行时会去 CDN 拉 internal 导致 404。',
-        );
-    }
     const credInfo = describeCredentialSource(extensionRoot);
     const payloadCheck = validateRemotePayload(remoteDir);
 
@@ -106,14 +104,10 @@ exports.onAfterBuild = async function onAfterBuild(options, result) {
         throw new Error(`[${PACKAGE_NAME}] 无法上传: ${payloadCheck.reason}`);
     }
 
-    console.log(
-        `[${PACKAGE_NAME}] 待上传: ${payloadCheck.fileCount} 个文件`
-        + `（resources: ${payloadCheck.resourcesCount}）`,
-    );
+    console.log(`[${PACKAGE_NAME}] 待上传: ${payloadCheck.fileCount} 个文件`);
 
     const summary = await uploadRemoteDir(remoteDir, extensionRoot, {
         keyPrefix: versionedKeyPrefix,
-        onlyBundle: 'resources',
         log: (msg) => console.log(msg),
     });
 
